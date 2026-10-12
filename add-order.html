@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เพิ่มคำสั่งซื้อ | ระบบติดตามคำสั่งซื้อ สำนักพิมพ์อมตะ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="index.html">
+        สุพัตรา
+        <small>ระบบติดตามคำสั่งซื้อ สำนักพิมพ์อมตะ</small>
+      </a>
+      <nav class="nav">
+        <a href="index.html">หน้าแรก</a>
+        <a href="orders.html">รายการคำสั่งซื้อ</a>
+        <a href="add-order.html" class="active">เพิ่มคำสั่งซื้อ</a>
+        <a href="summary.html">สรุปยอด</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <h1 class="page-title">เพิ่มคำสั่งซื้อ</h1>
+    <p class="page-subtitle">กรอกข้อมูลให้ครบ แล้วกดปุ่ม "บันทึกคำสั่งซื้อ"</p>
+
+    <form id="order-form" class="panel form-panel" novalidate>
+      <div class="form-alert" id="form-alert" role="alert" hidden>
+        กรอกข้อมูลไม่ครบหรือไม่ถูกต้อง กรุณาตรวจช่องที่มีข้อความสีแดง
+      </div>
+
+      <div class="field">
+        <label for="shop">ร้านค้า</label>
+        <select id="shop" name="shop">
+          <option value="">-- เลือกร้านค้า --</option>
+        </select>
+        <p class="field-error" id="shop-error"></p>
+      </div>
+
+      <div class="field">
+        <label for="book">หนังสือ</label>
+        <select id="book" name="book">
+          <option value="">-- เลือกหนังสือ --</option>
+        </select>
+        <p class="field-error" id="book-error"></p>
+      </div>
+
+      <div class="field">
+        <label for="quantity">จำนวน (เล่ม)</label>
+        <input id="quantity" name="quantity" type="number" min="1" step="1" inputmode="numeric" placeholder="เช่น 20">
+        <p class="field-error" id="quantity-error"></p>
+      </div>
+
+      <div class="total-box">
+        <div class="total-row">
+          <span>ราคาต่อเล่ม</span>
+          <span id="unit-price">-</span>
+        </div>
+        <div class="total-row">
+          <span>วันที่สั่ง</span>
+          <span id="order-date"></span>
+        </div>
+        <div class="total-row total-main">
+          <span>ยอดเงินรวม</span>
+          <span id="total">฿0</span>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="save-btn">บันทึกคำสั่งซื้อ</button>
+        <a href="orders.html" class="btn btn-secondary">ยกเลิก</a>
+      </div>
+    </form>
+  </main>
+
+  <footer class="site-footer">
+    สำนักพิมพ์อมตะ &middot; ระบบติดตามคำสั่งซื้อ
+  </footer>
+
+  <script src="format.js"></script>
+  <script src="data.js"></script>
+  <script>
+    const form = document.getElementById('order-form');
+    const shopSelect = document.getElementById('shop');
+    const bookSelect = document.getElementById('book');
+    const quantityInput = document.getElementById('quantity');
+    let books = [];
+
+    async function setupForm() {
+      const shops = await getShops();
+      books = await getBooks();
+
+      shops.forEach(function (name) {
+        shopSelect.add(new Option(name, name));
+      });
+      books.forEach(function (b) {
+        bookSelect.add(new Option(b.title + ' (' + formatBaht(b.price) + ')', b.title));
+      });
+
+      document.getElementById('order-date').textContent =
+        formatThaiDate(daysAgo(0)) + ' (วันนี้)';
+    }
+
+    function selectedBook() {
+      return books.find(function (b) { return b.title === bookSelect.value; });
+    }
+
+    // จำนวนที่ถูกต้องต้องเป็นเลขจำนวนเต็มตั้งแต่ 1 ขึ้นไป ถ้าไม่ถูกต้องคืนค่า null
+    function readQuantity() {
+      const text = quantityInput.value.trim();
+      if (!/^\d+$/.test(text)) return null;
+      const n = Number(text);
+      return n >= 1 ? n : null;
+    }
+
+    function updateTotal() {
+      const book = selectedBook();
+      const qty = readQuantity();
+      document.getElementById('unit-price').textContent = book ? formatBaht(book.price) : '-';
+      document.getElementById('total').textContent =
+        book && qty ? formatBaht(book.price * qty) : '฿0';
+    }
+
+    function setError(field, message) {
+      document.getElementById(field + '-error').textContent = message;
+      document.getElementById(field).classList.toggle('has-error', Boolean(message));
+      // แก้ครบทุกช่องแล้ว ให้ซ่อนกล่องเตือนด้านบน
+      if (!message && !form.querySelector('.has-error')) {
+        document.getElementById('form-alert').hidden = true;
+      }
+    }
+
+    function validate() {
+      let ok = true;
+
+      if (!shopSelect.value) { setError('shop', 'กรุณาเลือกร้านค้า'); ok = false; }
+      else setError('shop', '');
+
+      if (!bookSelect.value) { setError('book', 'กรุณาเลือกหนังสือ'); ok = false; }
+      else setError('book', '');
+
+      if (quantityInput.value.trim() === '') {
+        setError('quantity', 'กรุณาใส่จำนวน');
+        ok = false;
+      } else if (readQuantity() === null) {
+        setError('quantity', 'จำนวนต้องเป็นเลขจำนวนเต็มตั้งแต่ 1 ขึ้นไป');
+        ok = false;
+      } else {
+        setError('quantity', '');
+      }
+
+      document.getElementById('form-alert').hidden = ok;
+      return ok;
+    }
+
+    shopSelect.addEventListener('change', function () { if (shopSelect.value) setError('shop', ''); });
+    bookSelect.addEventListener('change', function () {
+      if (bookSelect.value) setError('book', '');
+      updateTotal();
+    });
+    quantityInput.addEventListener('input', function () {
+      if (readQuantity() !== null) setError('quantity', '');
+      updateTotal();
+    });
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      if (!validate()) return;
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'กำลังบันทึก...';
+
+      const order = await addOrder({
+        shop_name: shopSelect.value,
+        book_title: bookSelect.value,
+        quantity: readQuantity(),
+        unit_price: selectedBook().price,
+      });
+
+      window.location.href = 'orders.html?new=' + order.id;
+    });
+
+    setupForm();
+  </script>
+</body>
+</html>
